@@ -37,6 +37,8 @@ def is_equal(a, b):
 def get_differences(sas_output, ips_output):
     sas_output.replace("", np.nan, inplace=True)
     ips_output.replace("", np.nan, inplace=True)
+    sas_output.sort_values(by=['SERIAL'])
+    ips_output.sort_values(by=['SERIAL'])
 
     for a in columns_to_extract:
         sas_output['SAS_' + a] = sas_output[a]
