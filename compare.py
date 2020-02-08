@@ -47,7 +47,7 @@ def get_differences(sas_output, ips_output):
         sas_output[a + "_Match"] = np.where(is_equal(sas_output[a], ips_output[a]), True, False)
 
         if sas_output[a].dtypes == "float64":
-            sas_output[a + "_Diff %"] = \
+            sas_output[a + "_Diff"] = \
                 np.where(is_equal(sas_output[a], ips_output[a]), 0, abs(sas_output[a] - ips_output[a]))
         else:
             sas_output[a + "_Diff"] = np.where(is_equal(sas_output[a], ips_output[a]), "", "False")
