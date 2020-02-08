@@ -93,10 +93,16 @@ if __name__ == "__main__":
     c = differences.style.apply(lambda x: ['background-color: yellow' if not v else '' for v in x], subset=match)
     c.to_excel(differences_file, sheet_name="Differences", engine='xlsxwriter', index=False, freeze_panes=(1, 1))
 
-    print("All done. Differences are in " + differences_file)
-    print("Unmatched items:")
+    total = len(df1.index)
+    total_unmatched = sum(y[1] for x, y in stats.items())
+
+    print()
+    print("Differences are in: " + differences_file)
+    print("Total Items: %5d, Total Unmatched Items: %4d" % (total, total_unmatched))
+    print()
+    print("Summary of Unmatched Items:")
     print()
     for key, value in stats.items():
         if value[1] > 0:
-            perc = (value[1] / len(df1.index)) * 100.0
-            print("%20s: % 4d/%5d, % 3.2f%%" % (key, value[1], len(df1.index), perc))
+            perc = (value[1] / total) * 100.0
+            print("%20s: % 4d/%5d, % 3.2f%%" % (key, value[1], total, perc))
