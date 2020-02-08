@@ -32,8 +32,8 @@ def is_equal(a, b):
 
 
 def get_differences(sas_output, ips_output):
-    # sas_output.replace("", np.nan, inplace=True)
-    # ips_output.replace("", np.nan, inplace=True)
+    sas_output.fillna(0, inplace=True)
+    ips_output.fillna(0, inplace=True)
 
     sas_output.sort_values(by=['SERIAL'], inplace=True)
     ips_output.sort_values(by=['SERIAL'], inplace=True)
@@ -42,16 +42,9 @@ def get_differences(sas_output, ips_output):
     ips_output.reset_index(inplace=True)
 
     for a in columns_to_extract:
-        sas_output.fillna(0, inplace=True)
-        ips_output.fillna(0, inplace=True)
         sas_output['SAS_' + a] = sas_output[a]
         sas_output['IPS_' + a] = ips_output[a]
         sas_output[a + "_Match"] = np.where(is_equal(sas_output[a], ips_output[a]), True, False)
-
-        def perc(x, y):
-            # if x > y:
-            #     return abs(x - y) / ((x + y) / 2)
-            return abs(y - x) / ((x + y) / 2)
 
         if sas_output[a].dtypes == "float64":
             sas_output[a + "_Diff %"] = \
@@ -65,6 +58,11 @@ def get_differences(sas_output, ips_output):
     out = sas_output.query(query)
 
     return out
+
+
+def highlight_false(s):
+    is_max = s == False
+    return ['background-color: yellow' if v else '' for v in is_max]
 
 
 if __name__ == "__main__":
@@ -89,18 +87,10 @@ if __name__ == "__main__":
 
     differences = get_differences(df1, df2)
 
+    match = [x for x in differences.columns.values if x.endswith("_Match")]
 
-    def highlight_max(s):
-        is_max = s == False
-        return ['background-color: yellow' if v else '' for v in is_max]
-
-
-    match = []
-    for a in list(differences.columns.values):
-        if a.endswith("_Match"):
-            match.append(a)
-    differences.style. \
-        apply(highlight_max, subset=match). \
-        to_excel(differences_file, sheet_name="Differences", engine='xlsxwriter', index=False, freeze_panes=(1, 1))
+    differences.style.apply(highlight_false, subset=match). \
+        to_excel(differences_file, sheet_name="Differences",
+                 engine='xlsxwriter', index=False, freeze_panes=(1, 1))
 
     print("All done. Differences are in " + differences_file)
