@@ -56,7 +56,7 @@ def get_differences(sas_output, ips_output):
 
     query = ' | '.join(map(lambda x: x + '_Match' + " == False", columns_to_extract))
     out = sas_output.query(query)
-
+    del out['index']
     return out
 
 
