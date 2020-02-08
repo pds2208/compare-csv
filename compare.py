@@ -49,13 +49,13 @@ def get_differences(sas_output, ips_output):
         sas_output[a + "_Match"] = np.where(is_equal(sas_output[a], ips_output[a]), True, False)
 
         def perc(x, y):
-            if x.ge(y):
-                return abs(x - y) / ((x + y) / 2)
+            # if x > y:
+            #     return abs(x - y) / ((x + y) / 2)
             return abs(y - x) / ((x + y) / 2)
 
         if sas_output[a].dtypes == "float64":
             sas_output[a + "_Diff %"] = \
-                np.where(is_equal(sas_output[a], ips_output[a]), 0, perc(sas_output[a], ips_output[a]))
+                np.where(is_equal(sas_output[a], ips_output[a]), 0, abs(sas_output[a] - ips_output[a]))
         else:
             sas_output[a + "_Diff"] = np.where(is_equal(sas_output[a], ips_output[a]), "", "False")
 
