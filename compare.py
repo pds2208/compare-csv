@@ -1,5 +1,6 @@
 import argparse
-import sys
+from functools import reduce
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -28,11 +29,7 @@ def get_datasets(sas_survey_output, py_survey_output):
     return sas_survey_df, py_survey_df
 
 
-def is_equal(a, b):
-    return (a == b) | ((a != a) & (b != b))
-
-
-def get_differences(sas, ips):
+def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> Tuple:
     sas.fillna(0, inplace=True)
     ips.fillna(0, inplace=True)
 
@@ -42,7 +39,10 @@ def get_differences(sas, ips):
     sas.reset_index(inplace=True)
     ips.reset_index(inplace=True)
 
-    stats = {}
+    def is_equal(a, b):
+        return (a == b) | ((a != a) & (b != b))
+
+    s = {}
     for a in columns_to_extract:
         sas['SAS_' + a] = sas[a]
         sas['IPS_' + a] = ips[a]
@@ -50,7 +50,7 @@ def get_differences(sas, ips):
 
         match_cnt = sum(x is True for x in sas[a + '_Match'])
         unmatch_cnt = sum(x is False for x in sas[a + '_Match'])
-        stats[a] = (match_cnt, unmatch_cnt)
+        s[a] = (match_cnt, unmatch_cnt)
 
         if sas[a].dtypes == "float64":
             sas[a + "_Diff"] = (
@@ -64,7 +64,36 @@ def get_differences(sas, ips):
         del sas[a]
 
     query = ' | '.join(map(lambda x: x + '_Match' + " == False", columns_to_extract))
-    return sas.query(query).drop('index', 1), stats
+    return sas.query(query).drop('index', 1), s
+
+
+def compare_files(sas_output: str, ips_output: str, differences_file: str) -> None:
+    df1, df2 = get_datasets(sas_output, ips_output)
+    if df2.equals(df1):
+        print("Files are equal")
+        return
+    if len(df1) != len(df2):
+        print("Error: files have difference row counts")
+        return
+
+    differences, stats = get_differences(df1, df2)
+    match = [x for x in differences.columns.values if x.endswith("_Match")]
+    c = differences.style.apply(lambda x: ['background-color: yellow' if not v else '' for v in x], subset=match)
+    c.to_excel(differences_file, sheet_name="Differences", engine='xlsxwriter', index=False, freeze_panes=(1, 1))
+    total = len(df1.index)
+    total_unmatched = len(differences)
+    total_perc = (total_unmatched / total) * 100.0
+
+    print()
+    print("Total Items: %5d, Total Unmatched rows: %4d (%3.2f%%), Differences -> %s"
+          % (total, total_unmatched, total_perc, differences_file))
+    print()
+    print("Summary of Unmatched Items:")
+    print()
+    for key, value in stats.items():
+        if value[1] > 0:
+            perc = (value[1] / total) * 100.0
+            print("%20s: % 4d/%5d, % 3.2f%%" % (key, value[1], total, perc))
 
 
 if __name__ == "__main__":
@@ -77,32 +106,5 @@ if __name__ == "__main__":
                         help="file to store differences in")
 
     args = parser.parse_args()
-    sas_output = args.sas_output
-    ips_output = args.ips_output
-    differences_file = args.differences_file
 
-    df1, df2 = get_datasets(sas_output, ips_output)
-    if df2.equals(df1):
-        print("files are equal")
-        sys.exit(0)
-
-    differences, stats = get_differences(df1, df2)
-
-    match = [x for x in differences.columns.values if x.endswith("_Match")]
-
-    c = differences.style.apply(lambda x: ['background-color: yellow' if not v else '' for v in x], subset=match)
-    c.to_excel(differences_file, sheet_name="Differences", engine='xlsxwriter', index=False, freeze_panes=(1, 1))
-
-    total = len(df1.index)
-    total_unmatched = sum(y[1] for x, y in stats.items())
-
-    print()
-    print("Differences are in: " + differences_file)
-    print("Total Items: %5d, Total Unmatched Items: %4d" % (total, total_unmatched))
-    print()
-    print("Summary of Unmatched Items:")
-    print()
-    for key, value in stats.items():
-        if value[1] > 0:
-            perc = (value[1] / total) * 100.0
-            print("%20s: % 4d/%5d, % 3.2f%%" % (key, value[1], total, perc))
+    compare_files(args.sas_output, args.ips_output, args.differences_file)
