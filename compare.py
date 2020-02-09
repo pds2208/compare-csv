@@ -38,8 +38,8 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> Tuple:
     sas.reset_index(inplace=True)
     ips.reset_index(inplace=True)
 
-    def is_equal(a, b):
-        return (a == b) | ((a != a) & (b != b))
+    def is_equal(series_a, series_b):
+        return (series_a == series_b) | ((series_a != series_a) & (series_b != series_b))
 
     s = {}
     for a in columns_to_extract:
