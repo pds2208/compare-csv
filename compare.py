@@ -1,10 +1,10 @@
 import argparse
-from typing import Tuple
+from typing import Tuple, Dict
 
 import numpy as np
 import pandas as pd
 
-columns_to_extract = [
+columns_to_extract: Tuple[str, ...] = (
     "SERIAL", "SHIFT_WT", "NON_RESPONSE_WT", "MINS_WT", "TRAFFIC_WT", "UNSAMP_TRAFFIC_WT",
     "IMBAL_WT", "FINAL_WT", "STAY", "STAYK", "FARE", "FAREK", "SPEND", "SPENDIMPREASON",
     "SPENDK", "VISIT_WT", "VISIT_WTK", "STAY_WT", "STAY_WTK", "EXPENDITURE_WT", "EXPENDITURE_WTK",
@@ -12,7 +12,9 @@ columns_to_extract = [
     "STAY1K", "STAY2K", "STAY3K", "STAY4K", "STAY5K", "STAY6K", "STAY7K", "STAY8K", "SPEND1",
     "SPEND2", "SPEND3", "SPEND4", "SPEND5", "SPEND6", "SPEND7", "SPEND8", "DIRECTLEG", "OVLEG",
     "UKLEG"
-]
+)
+
+Stats = Dict[str, Tuple]
 
 
 def get_datasets(sas_survey_output: str, py_survey_output: str) -> (pd.DataFrame, pd.DataFrame):
@@ -22,16 +24,13 @@ def get_datasets(sas_survey_output: str, py_survey_output: str) -> (pd.DataFrame
     py_survey_df.columns = py_survey_df.columns.str.upper()
     sas_survey_df.columns = sas_survey_df.columns.str.upper()
 
-    py_survey_df = py_survey_df[columns_to_extract]
-    sas_survey_df = sas_survey_df[columns_to_extract]
+    py_survey_df = py_survey_df[list(columns_to_extract)]
+    sas_survey_df = sas_survey_df[list(columns_to_extract)]
 
     return sas_survey_df, py_survey_df
 
 
-def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> Tuple:
-    sas.fillna(0, inplace=True)
-    ips.fillna(0, inplace=True)
-
+def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stats):
     sas.sort_values(by=['SERIAL'], inplace=True)
     ips.sort_values(by=['SERIAL'], inplace=True)
 
@@ -41,27 +40,20 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> Tuple:
     def is_equal(series_a, series_b):
         return (series_a == series_b) | ((series_a != series_a) & (series_b != series_b))
 
-    s = {}
+    s: Stats = {}
     for a in columns_to_extract:
-        sas['SAS_' + a] = sas[a]
-        sas['IPS_' + a] = ips[a]
-        sas[a + "_Match"] = np.where(is_equal(sas[a], ips[a]), True, False)
+        sas['SAS_' + a] = sas[a].fillna(0) if sas[a].dtype.kind in 'biufc' else sas[a]
+        sas['IPS_' + a] = ips[a].fillna(0) if ips[a].dtype.kind in 'biufc' else ips[a]
+        sas[a + "_Match"] = np.where(is_equal(sas['SAS_' + a], sas['IPS_' + a]), True, False)
 
         match_cnt = sum(x is True for x in sas[a + '_Match'])
         unmatch_cnt = sum(x is False for x in sas[a + '_Match'])
         s[a] = (match_cnt, unmatch_cnt)
+        sas[a + "_Diff"] = np.where(is_equal(sas[a], ips[a]), 0, abs(sas[a] - ips[a])) \
+            if sas[a].dtype.kind in 'biufc' \
+            else np.where(is_equal(sas[a], ips[a]), "", "False")
 
-        if sas[a].dtypes == "float64":
-            sas[a + "_Diff"] = (
-                np.where(is_equal(sas[a], ips[a]), 0, abs(sas[a] - ips[a]))
-            )
-        else:
-            sas[a + "_Diff"] = (
-                np.where(is_equal(sas[a], ips[a]), "", "False")
-            )
-
-        del sas[a]
-
+    sas.drop(list(columns_to_extract), axis=1, inplace=True)
     query = ' | '.join(map(lambda x: x + '_Match' + " == False", columns_to_extract))
     return sas.query(query).drop('index', 1), s
 
@@ -86,7 +78,7 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
     print_stats(differences_file, stats, total, total_perc, total_unmatched)
 
 
-def print_stats(diff_file: str, stats: dict, total: int, total_perc: float, total_unmatched: int) -> None:
+def print_stats(diff_file: str, stats: Stats, total: int, total_perc: float, total_unmatched: int) -> None:
     print()
     print("Total Items: %5d, Total Unmatched rows: %4d (%3.2f%%), Differences -> %s"
           % (total, total_unmatched, total_perc, diff_file))
