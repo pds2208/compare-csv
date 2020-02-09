@@ -1,5 +1,4 @@
 import argparse
-from functools import reduce
 from typing import Tuple
 
 import numpy as np
@@ -16,7 +15,7 @@ columns_to_extract = [
 ]
 
 
-def get_datasets(sas_survey_output, py_survey_output):
+def get_datasets(sas_survey_output: str, py_survey_output: str) -> (pd.DataFrame, pd.DataFrame):
     sas_survey_df = pd.read_csv(sas_survey_output, engine='python', na_values=' ')
     py_survey_df = pd.read_csv(py_survey_output, engine='python', na_values=' ')
 
@@ -73,7 +72,7 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
         print("Files are equal")
         return
     if len(df1) != len(df2):
-        print("Error: files have difference row counts")
+        print("Error: files have different row counts")
         return
 
     differences, stats = get_differences(df1, df2)
@@ -84,9 +83,13 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
     total_unmatched = len(differences)
     total_perc = (total_unmatched / total) * 100.0
 
+    print_stats(differences_file, stats, total, total_perc, total_unmatched)
+
+
+def print_stats(diff_file: str, stats: dict, total: int, total_perc: float, total_unmatched: int) -> None:
     print()
     print("Total Items: %5d, Total Unmatched rows: %4d (%3.2f%%), Differences -> %s"
-          % (total, total_unmatched, total_perc, differences_file))
+          % (total, total_unmatched, total_perc, diff_file))
     print()
     print("Summary of Unmatched Items:")
     print()
