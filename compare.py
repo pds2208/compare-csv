@@ -6,7 +6,8 @@ import pandas as pd
 
 columns_to_extract: Tuple[str, ...] = (
     "SERIAL", "SHIFT_WT", "NON_RESPONSE_WT", "MINS_WT", "TRAFFIC_WT", "UNSAMP_TRAFFIC_WT",
-    "IMBAL_WT", "FINAL_WT", "STAY", "STAYK", "FARE", "FAREK", "SPEND", "SPENDIMPREASON",
+    "IMBAL_WT", "FINAL_WT", "STAY", "STAYK", "FARE", "FAREK", "SPEND", "EXPENDITURE", "DVEXPEND", "FLOW", "PURPOSE",
+    "RESIDENCE", "COUNTRYVISIT", "SPENDIMPREASON",
     "SPENDK", "VISIT_WT", "VISIT_WTK", "STAY_WT", "STAY_WTK", "EXPENDITURE_WT", "EXPENDITURE_WTK",
     "NIGHTS1", "NIGHTS2", "NIGHTS3", "NIGHTS4", "NIGHTS5", "NIGHTS6", "NIGHTS7", "NIGHTS8",
     "STAY1K", "STAY2K", "STAY3K", "STAY4K", "STAY5K", "STAY6K", "STAY7K", "STAY8K", "SPEND1",
@@ -31,12 +32,6 @@ def get_datasets(sas_survey_output: str, py_survey_output: str) -> (pd.DataFrame
 
 
 def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stats):
-    sas.sort_values(by=['SERIAL'], inplace=True)
-    ips.sort_values(by=['SERIAL'], inplace=True)
-
-    sas.reset_index(inplace=True)
-    ips.reset_index(inplace=True)
-
     def is_equal(series_a, series_b):
         return (series_a == series_b) | ((series_a != series_a) & (series_b != series_b))
 
@@ -46,6 +41,10 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stat
         ips[a].fillna(0, inplace=True) if ips[a].dtype.kind in 'biufc' else ips[a].fillna("", inplace=True)
         sas['SAS_' + a] = sas[a]
         sas['IPS_' + a] = ips[a]
+
+        x = np.where(is_equal(sas['SAS_' + a], sas['IPS_' + a]), True, False)
+        if x.all():
+            continue
 
         sas[a + "_Match"] = np.where(is_equal(sas['SAS_' + a], sas['IPS_' + a]), True, False)
 
@@ -58,7 +57,15 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stat
             else np.where(is_equal(sas[a], ips[a]), "", False)
 
     sas.drop(list(columns_to_extract), axis=1, inplace=True)
-    query = ' | '.join(map(lambda x: x + '_Match' + " == False", columns_to_extract))
+
+    def get_match_columns():
+        cols = []
+        for item in columns_to_extract:
+            if item + '_Match' in sas:
+                cols.append(item + '_Match')
+        return cols
+
+    query = ' | '.join(map(lambda x: x + " == False", get_match_columns()))
     return sas.query(query).drop('index', 1), s
 
 
@@ -71,7 +78,18 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
         print("Error: files have different row counts")
         return
 
-    differences, stats = get_differences(df1, df2)
+    df1.sort_values(by=['SERIAL'], inplace=True)
+    df2.sort_values(by=['SERIAL'], inplace=True)
+
+    df1.reset_index(inplace=True)
+    df2.reset_index(inplace=True)
+
+    sas = df1.copy(deep=True)
+    ips = df2.copy(deep=True)
+
+    differences, stats = get_differences(sas, ips)
+
+    writer = pd.ExcelWriter(differences_file, engine='xlsxwriter')
 
     match = [x for x in differences.columns.values if x.endswith("_Match")]
     c = differences.style.apply(lambda x: ['background-color: yellow' if not v else '' for v in x], subset=match)
@@ -79,7 +97,33 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
     match = [x for x in differences.columns.values if x.endswith("_Diff")]
     c = c.apply(lambda x: ['background-color: yellow' if v else '' for v in x], subset=match)
 
-    c.to_excel(differences_file, sheet_name="Differences", engine='xlsxwriter', index=False, freeze_panes=(1, 1))
+    df1.to_excel(writer, sheet_name='SAS', freeze_panes=(1, 1), index=False)
+    df2.to_excel(writer, sheet_name='IPS', freeze_panes=(1, 1), index=False)
+
+    c.to_excel(writer, sheet_name='Differences', freeze_panes=(1, 1), index=False)
+
+    def get_col_widths(dataframe):
+        idx_max = max([len(str(s)) for s in dataframe.index.values] + [len(str(dataframe.index.name))]) + 8
+        return [idx_max] + [max([len(str(s)) for s in dataframe[col].values] + [len(col)]) for col in
+                            dataframe.columns]
+
+    sas_worksheet = writer.sheets['SAS']
+    sas_worksheet.set_zoom(120)
+    for i, width in enumerate(get_col_widths(df1)):
+        sas_worksheet.set_column(i, i, width)
+
+    ips_worksheet = writer.sheets['IPS']
+    ips_worksheet.set_zoom(120)
+    for i, width in enumerate(get_col_widths(df2)):
+        ips_worksheet.set_column(i, i, width)
+
+    worksheet = writer.sheets['Differences']
+    worksheet.activate()
+    worksheet.set_zoom(120)
+    for i, width in enumerate(get_col_widths(differences)):
+        worksheet.set_column(i, i, width)
+
+    writer.save()
 
     total = len(df1.index)
     total_unmatched = len(differences)
@@ -98,7 +142,7 @@ def print_stats(diff_file: str, stats: Stats, total: int, total_perc: float, tot
     for key, value in stats.items():
         if value[1] > 0:
             perc = (value[1] / total) * 100.0
-            print("%20s: % 4d/%5d, % 3.2f%%" % (key, value[1], total, perc))
+            print("%25s: % 4d/%5d, % 3.2f%%" % (key, value[1], total, perc))
 
 
 if __name__ == "__main__":
