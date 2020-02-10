@@ -42,16 +42,20 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stat
 
     s: Stats = {}
     for a in columns_to_extract:
-        sas['SAS_' + a] = sas[a].fillna(0) if sas[a].dtype.kind in 'biufc' else sas[a]
-        sas['IPS_' + a] = ips[a].fillna(0) if ips[a].dtype.kind in 'biufc' else ips[a]
+        sas[a].fillna(0, inplace=True) if sas[a].dtype.kind in 'biufc' else sas[a].fillna("", inplace=True)
+        ips[a].fillna(0, inplace=True) if ips[a].dtype.kind in 'biufc' else ips[a].fillna("", inplace=True)
+        sas['SAS_' + a] = sas[a]
+        sas['IPS_' + a] = ips[a]
+
         sas[a + "_Match"] = np.where(is_equal(sas['SAS_' + a], sas['IPS_' + a]), True, False)
 
         match_cnt = sum(x is True for x in sas[a + '_Match'])
         unmatch_cnt = sum(x is False for x in sas[a + '_Match'])
         s[a] = (match_cnt, unmatch_cnt)
-        sas[a + "_Diff"] = np.where(is_equal(sas[a], ips[a]), 0, abs(sas[a] - ips[a])) \
+
+        sas[a + "_Diff"] = np.where(sas[a] == ips[a], 0, abs(sas[a] - ips[a])) \
             if sas[a].dtype.kind in 'biufc' \
-            else np.where(is_equal(sas[a], ips[a]), "", "False")
+            else np.where(is_equal(sas[a], ips[a]), "", False)
 
     sas.drop(list(columns_to_extract), axis=1, inplace=True)
     query = ' | '.join(map(lambda x: x + '_Match' + " == False", columns_to_extract))
@@ -68,9 +72,15 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
         return
 
     differences, stats = get_differences(df1, df2)
+
     match = [x for x in differences.columns.values if x.endswith("_Match")]
     c = differences.style.apply(lambda x: ['background-color: yellow' if not v else '' for v in x], subset=match)
+
+    match = [x for x in differences.columns.values if x.endswith("_Diff")]
+    c = c.apply(lambda x: ['background-color: yellow' if v else '' for v in x], subset=match)
+
     c.to_excel(differences_file, sheet_name="Differences", engine='xlsxwriter', index=False, freeze_panes=(1, 1))
+
     total = len(df1.index)
     total_unmatched = len(differences)
     total_perc = (total_unmatched / total) * 100.0
