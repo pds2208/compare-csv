@@ -4,10 +4,10 @@ from typing import Tuple, Dict
 import numpy as np
 import pandas as pd
 
-columns_to_extract: Tuple[str, ...] = (
+all_columns: Tuple[str, ...] = (
     "SERIAL", "SHIFT_WT", "NON_RESPONSE_WT", "MINS_WT", "TRAFFIC_WT", "UNSAMP_TRAFFIC_WT",
     "IMBAL_WT", "FINAL_WT", "STAY", "STAYK", "FARE", "FAREK", "SPEND", "EXPENDITURE", "DVEXPEND", "FLOW", "PURPOSE",
-    "RESIDENCE", "COUNTRYVISIT", "SPENDIMPREASON",
+    "RESIDENCE", "COUNTRYVISIT", "SPENDIMPREASON", "PORTROUTE",
     "SPENDK", "VISIT_WT", "VISIT_WTK", "STAY_WT", "STAY_WTK", "EXPENDITURE_WT", "EXPENDITURE_WTK",
     "NIGHTS1", "NIGHTS2", "NIGHTS3", "NIGHTS4", "NIGHTS5", "NIGHTS6", "NIGHTS7", "NIGHTS8",
     "STAY1K", "STAY2K", "STAY3K", "STAY4K", "STAY5K", "STAY6K", "STAY7K", "STAY8K", "SPEND1",
@@ -15,12 +15,57 @@ columns_to_extract: Tuple[str, ...] = (
     "UKLEG"
 )
 
+fare_columns: Tuple[str, ...] = (
+    "SERIAL", "SPEND", "SPENDIMPREASON", "FARE", "FAREK"
+)
+
+expenditure_columns: Tuple[str, ...] = (
+    "SERIAL", "EXPENDITURE"
+)
+
+unsamp_pv_columns: Tuple[str, ...] = (
+    "SERIAL", "UNSAMP_REGION_GRP_PV", "DVPORTCODE"
+)
+
+intermediate_columns: Tuple[str, ...] = (
+    "SERIAL", "UK_OS_PV", "STAYIMPCTRYLEVEL1_PV", "DUR1_PV", "PUR1_PV", "PUR2_PV",
+    "STAYIMPCTRYLEVEL2_PV", "STAYIMPCTRYLEVEL3_PV", "DUR2_PV", "PUR3_PV",
+    "SPEND_IMP_ELIGIBLE_PV", "SPEND_IMP_FLAG_PV", "SPENDK", "STAY",
+    'INTDATE',
+    'DVFARE',
+    'FARE',
+    'FARES_IMP_ELIGIBLE_PV',
+    'FARES_IMP_FLAG_PV',
+    'FAREK',
+    'FAGE_PV',
+    'BABYFARE',
+    'CHILDFARE',
+    'APD_PV',
+    'DVPACKAGE',
+    'DISCNT_F2_PV',
+    'QMFARE_PV',
+    'DVPACKCOST',
+    'DISCNT_PACKAGE_COST_PV',
+    'DVPERSONS',
+    'DVEXPEND',
+    'BEFAF',
+    'SPENDIMPREASON',
+    'DUTY_FREE_PV',
+    'PACKAGE'
+)
+
+# columns_to_extract = all_columns
+# columns_to_extract = expenditure_columns
+columns_to_extract = unsamp_pv_columns
 Stats = Dict[str, Tuple]
 
 
 def get_datasets(sas_survey_output: str, py_survey_output: str) -> (pd.DataFrame, pd.DataFrame):
     sas_survey_df = pd.read_csv(sas_survey_output, engine='python', na_values=' ')
     py_survey_df = pd.read_csv(py_survey_output, engine='python', na_values=' ')
+
+    # sas_survey_df.replace(to_replace=-1, value=np.nan, inplace=True)
+    # py_survey_df.replace(to_replace=-1, value=np.nan, inplace=True)
 
     py_survey_df.columns = py_survey_df.columns.str.upper()
     sas_survey_df.columns = sas_survey_df.columns.str.upper()
@@ -66,17 +111,13 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stat
         return cols
 
     query = ' | '.join(map(lambda x: x + " == False", get_match_columns()))
+    if query == '': # we are equal
+        return None, s
     return sas.query(query).drop('index', 1), s
 
 
 def compare_files(sas_output: str, ips_output: str, differences_file: str) -> None:
     df1, df2 = get_datasets(sas_output, ips_output)
-    if df2.equals(df1):
-        print("Files are equal")
-        return
-    if len(df1) != len(df2):
-        print("Error: files have different row counts")
-        return
 
     df1.sort_values(by=['SERIAL'], inplace=True)
     df2.sort_values(by=['SERIAL'], inplace=True)
@@ -84,10 +125,22 @@ def compare_files(sas_output: str, ips_output: str, differences_file: str) -> No
     df1.reset_index(inplace=True)
     df2.reset_index(inplace=True)
 
+    if df2.equals(df1):
+        print("Files are equal")
+        return
+
+    if len(df1) != len(df2):
+        print("Error: files have different row counts")
+        return
+
     sas = df1.copy(deep=True)
     ips = df2.copy(deep=True)
 
     differences, stats = get_differences(sas, ips)
+
+    if differences is None:
+        print("Files are equal")
+        return
 
     writer = pd.ExcelWriter(differences_file, engine='xlsxwriter')
 
