@@ -4,59 +4,29 @@ from typing import Tuple, Dict
 import numpy as np
 import pandas as pd
 
-all_columns: Tuple[str, ...] = (
-    "SERIAL", "SHIFT_WT", "NON_RESPONSE_WT", "MINS_WT", "TRAFFIC_WT", "UNSAMP_TRAFFIC_WT",
-    "IMBAL_WT", "FINAL_WT", "STAY", "STAYK", "FARE", "FAREK", "SPEND", "EXPENDITURE", "DVEXPEND", "FLOW", "PURPOSE",
-    "RESIDENCE", "COUNTRYVISIT", "SPENDIMPREASON", "PORTROUTE",
-    "SPENDK", "VISIT_WT", "VISIT_WTK", "STAY_WT", "STAY_WTK", "EXPENDITURE_WT", "EXPENDITURE_WTK",
-    "NIGHTS1", "NIGHTS2", "NIGHTS3", "NIGHTS4", "NIGHTS5", "NIGHTS6", "NIGHTS7", "NIGHTS8",
-    "STAY1K", "STAY2K", "STAY3K", "STAY4K", "STAY5K", "STAY6K", "STAY7K", "STAY8K", "SPEND1",
-    "SPEND2", "SPEND3", "SPEND4", "SPEND5", "SPEND6", "SPEND7", "SPEND8", "DIRECTLEG", "OVLEG",
-    "UKLEG"
+pv_columns: Tuple[str, ...] = (
+    "SERIAL", "DVPORTCODE", "PORTROUTE", "SHIFT_FLAG_PV", "WEEKDAY_END_PV", "AM_PM_NIGHT_PV", "MIG_FLAG_PV",
+    "CROSSINGS_FLAG_PV", "SHIFT_PORT_GRP_PV", "NR_FLAG_PV", "NR_PORT_GRP_PV", "MINS_FLAG_PV", "IMBAL_PORT_FACT_PV",
+    "IMBAL_ELIGIBLE_PV", "STAY_IMP_ELIGIBLE_PV", "IMBAL_PORT_GRP_PV", "STAY_IMP_FLAG_PV", "STAYIMPCTRYLEVEL4_PV",
+    "STAYIMPCTRYLEVEL2_PV", "DISCNT_PACKAGE_COST_PV", "DISCNT_F1_PV", "FARES_IMP_FLAG_PV", "OPERA_PV", "FAGE_PV",
+    "DISCNT_F2_PV", "STAYIMPCTRYLEVEL3_PV", "STAY_PURPOSE_GRP_PV", "UKPORT4_PV", "STAYIMPCTRYLEVEL1_PV",
+    "FARES_IMP_ELIGIBLE_PV", "TYPE_PV", "OSPORT1_PV", "QMFARE_PV", "PUR3_PV", "DUR2_PV", "DUTY_FREE_PV", "UK_OS_PV",
+    "UKPORT2_PV", "PUR2_PV", "PURPOSE_PV", "APD_PV", "IMBAL_CTRY_FACT_PV", "UKPORT1_PV", "UKPORT3_PV",
+    "SAMP_PORT_GRP_PV", "OSPORT2_PV", "MINS_CTRY_GRP_PV", "OSPORT4_PV", "UNSAMP_PORT_GRP_PV", "MINS_PORT_GRP_PV",
+    "UNSAMP_REGION_GRP_PV", "OSPORT3_PV", "PUR1_PV", "DUR1_PV"
 )
+columns_to_extract = pv_columns
 
-fare_columns: Tuple[str, ...] = (
-    "SERIAL", "SPEND", "SPENDIMPREASON", "FARE", "FAREK"
-)
+# output_columns: Tuple[str, ...] = (
+#     "SERIAL", "DVPORTCODE", "PORTROUTE", "SHIFT_WT", "NON_RESPONSE_WT", "MINS_WT", "TRAFFIC_WT", "UNSAMP_TRAFFIC_WT",
+#     "IMBAL_WT", "FINAL_WT", "STAY", "STAYK", "FARE", "FAREK", "SPEND", "EXPENDITURE", "DVEXPEND", "FLOW", "PURPOSE",
+#     "RESIDENCE", "COUNTRYVISIT", "SPENDIMPREASON", "PORTROUTE", "SPENDK", "VISIT_WT", "VISIT_WTK", "STAY_WT",
+#     "STAY_WTK", "EXPENDITURE_WT", "EXPENDITURE_WTK", "NIGHTS1", "NIGHTS2", "NIGHTS3", "NIGHTS4", "NIGHTS5", "NIGHTS6",
+#     "NIGHTS7", "NIGHTS8", "STAY1K", "STAY2K", "STAY3K", "STAY4K", "STAY5K", "STAY6K", "STAY7K", "STAY8K", "SPEND1",
+#     "SPEND2", "SPEND3", "SPEND4", "SPEND5", "SPEND6", "SPEND7", "SPEND8", "DIRECTLEG", "OVLEG", "UKLEG", "DVPORTCODE"
+# )
+# columns_to_extract = output_columns
 
-expenditure_columns: Tuple[str, ...] = (
-    "SERIAL", "EXPENDITURE"
-)
-
-unsamp_pv_columns: Tuple[str, ...] = (
-    "SERIAL", "UNSAMP_REGION_GRP_PV", "DVPORTCODE"
-)
-
-intermediate_columns: Tuple[str, ...] = (
-    "SERIAL", "UK_OS_PV", "STAYIMPCTRYLEVEL1_PV", "DUR1_PV", "PUR1_PV", "PUR2_PV",
-    "STAYIMPCTRYLEVEL2_PV", "STAYIMPCTRYLEVEL3_PV", "DUR2_PV", "PUR3_PV",
-    "SPEND_IMP_ELIGIBLE_PV", "SPEND_IMP_FLAG_PV", "SPENDK", "STAY",
-    'INTDATE',
-    'DVFARE',
-    'FARE',
-    'FARES_IMP_ELIGIBLE_PV',
-    'FARES_IMP_FLAG_PV',
-    'FAREK',
-    'FAGE_PV',
-    'BABYFARE',
-    'CHILDFARE',
-    'APD_PV',
-    'DVPACKAGE',
-    'DISCNT_F2_PV',
-    'QMFARE_PV',
-    'DVPACKCOST',
-    'DISCNT_PACKAGE_COST_PV',
-    'DVPERSONS',
-    'DVEXPEND',
-    'BEFAF',
-    'SPENDIMPREASON',
-    'DUTY_FREE_PV',
-    'PACKAGE'
-)
-
-# columns_to_extract = all_columns
-# columns_to_extract = expenditure_columns
-columns_to_extract = unsamp_pv_columns
 Stats = Dict[str, Tuple]
 
 
@@ -111,7 +81,7 @@ def get_differences(sas: pd.DataFrame, ips: pd.DataFrame) -> (pd.DataFrame, Stat
         return cols
 
     query = ' | '.join(map(lambda x: x + " == False", get_match_columns()))
-    if query == '': # we are equal
+    if query == '':  # we are equal
         return None, s
     return sas.query(query).drop('index', 1), s
 
